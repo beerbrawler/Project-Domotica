@@ -163,7 +163,16 @@ void loop()
       pinChange = false;
     }
 
-    servo();
+    if (pinState == false) {
+      servo1();
+      Serial.println("servo1");
+    }
+
+    else if (pinState == true) {
+      servo2();
+      Serial.println("servo2");
+    }
+
     // Execute when byte is received.
     while (ethernetClient.available())
     {
@@ -172,243 +181,244 @@ void loop()
       inByte = NULL;                         // Reset the read byte.
     }
 
-    if (pinChange) {
-      if (pinState) {
-        pos = 180;
-        myservo.write(pos);
-
-        
-      }
-
-      else {
-        pos = 90;
-        myservo.write(pos);
-
-        
-      }
-    }
   }
-    Serial.println("Application disonnected");
+
+  Serial.println("Application disonnected");
 }
 
-  void servo() {
-    // servo code
-    Serial.println("hoi");
-    /*for (pos = 0; pos<= 180; pos +=1){
-      myservo.write(pos);
-      delay(15);
-      }
-
-      for (pos = 180; pos >=0; pos -=1){
-      myservo.write(pos);
-      delay(15);
-      }*/
-
-    /*buttonstate = digitalRead(buttonpin);
-      if(buttonstate == HIGH){
-      pos = 90;
-      myservo.write(pos);
-      }
-      else
-      if(buttonstate == LOW){
-      pos = 180;
-      myservo.write(pos);
-      }*/
-
-    digitalWrite(trigPin, LOW);
-    delayMicroseconds(2);
-
-    digitalWrite(trigPin, HIGH);
-    delayMicroseconds(10);
-
-    digitalWrite(trigPin, LOW);
-    duration = pulseIn(eccoPin, HIGH);
-
-    distance = duration / 58.2;
-
-    if (distance >= maximumRange || distance <= minimumRange) {
-      Serial.println("-1");
-      pos = 90;
-      myservo.write(pos);
+void servo1() {
+  // servo code
+  Serial.println("hoi 1");
+  /*for (pos = 0; pos<= 180; pos +=1){
+    myservo.write(pos);
+    delay(15);
     }
 
+    for (pos = 180; pos >=0; pos -=1){
+    myservo.write(pos);
+    delay(15);
+    }*/
+
+  /*buttonstate = digitalRead(buttonpin);
+    if(buttonstate == HIGH){
+    pos = 90;
+    myservo.write(pos);
+    }
+    else
+    if(buttonstate == LOW){
+    pos = 180;
+    myservo.write(pos);
+    }*/
+
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+
+  digitalWrite(trigPin, LOW);
+  duration = pulseIn(eccoPin, HIGH);
+
+  distance = duration / 58.2;
+
+
+
+  if (distance >= maximumRange || distance <= minimumRange) {
+    Serial.println("-1");
+    pos = 90;
+    myservo.write(pos);
+  }
+
+  else {
+    Serial.println(distance);
+    pos = 180;
+    myservo.write(pos);
+  }
+}
+
+
+void servo2() {
+  Serial.println("hoi 2");
+
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+
+  digitalWrite(trigPin, LOW);
+  duration = pulseIn(eccoPin, HIGH);
+
+  distance = duration / 58.2;
+
+  if (distance >= maximumRange || distance <= minimumRange) {
+    Serial.println("-1");
+    pos = 180;
+    myservo.write(pos);
+  }
+
+  else {
+    Serial.println(distance);
+    pos = 90;
+    myservo.write(pos);
+  }
+}
+// Choose and switch your Kaku device, state is true/false (HIGH/LOW)
+void switchDefault(bool state)
+{
+  apa3Transmitter.sendUnit(0, state);          // APA3 Kaku (Gamma)
+  delay(100);
+  actionTransmitter.sendSignal(unitCodeActionOld, actionDevice, state);  // Action Kaku, old model
+  delay(100);
+  //mySwitch.send(2210410 + state, 24);  // tricky, false = 0, true = 1  // Action Kaku, new model
+  //delay(100);
+}
+
+// Implementation of (simple) protocol between app and Arduino
+// Request (from app) is single char ('a', 's', 't', 'i' etc.)
+// Response (to app) is 4 chars  (not all commands demand a response)
+void executeCommand(char cmd)
+{
+  char buf[4] = {'\0', '\0', '\0', '\0'};
+
+  // Command protocol
+  Serial.print("["); Serial.print(cmd); Serial.print("] -> ");
+  switch (cmd) {
+    case 'a': // Report sensor value to the app
+      intToCharBuf(sensorValue, buf, 4);                // convert to charbuffer
+      server.write(buf, 4);                             // response is always 4 chars (\n included)
+      Serial.print("Sensor: "); Serial.println(buf);
+      break;
+    case 's': // Report switch state to the app
+      if (pinState) {
+        server.write(" ON\n");  // always send 4 chars
+        Serial.println("Pin state is ON");
+      }
+      else {
+        server.write("OFF\n");
+        Serial.println("Pin state is OFF");
+      }
+      break;
+    case 't': // Toggle state; If state is already ON then turn it OFF
+      if (pinState) {
+        pinState = false;
+        Serial.println("Set pin state to \"OFF\"");
+      }
+      else {
+        pinState = true;
+        Serial.println("Set pin state to \"ON\"");
+      }
+      pinChange = true;
+      break;
+    case 'i':
+      digitalWrite(infoPin, HIGH);
+      break;
+    default:
+      digitalWrite(infoPin, LOW);
+  }
+}
+
+
+
+// read value from pin pn, return value is mapped between 0 and mx-1
+int readSensor(int pn, int mx)
+{
+  return map(analogRead(pn), 0, 1023, 0, mx - 1);
+}
+
+// Convert int <val> char buffer with length <len>
+void intToCharBuf(int val, char buf[], int len)
+{
+  String s;
+  s = String(val);                        // convert tot string
+  if (s.length() == 1) s = "0" + s;       // prefix redundant "0"
+  if (s.length() == 2) s = "0" + s;
+  s = s + "\n";                           // add newline
+  s.toCharArray(buf, len);                // convert string to char-buffer
+}
+
+// Check switch level and determine if an event has happend
+// event: low -> high or high -> low
+void checkEvent(int p, bool & state)
+{
+  static bool swLevel = false;       // Variable to store the switch level (Low or High)
+  static bool prevswLevel = false;   // Variable to store the previous switch level
+
+  swLevel = digitalRead(p);
+  if (swLevel)
+    if (prevswLevel) delay(1);
     else {
-      Serial.println(distance);
-      pos = 180;
-      myservo.write(pos);
+      prevswLevel = true;   // Low -> High transition
+      state = true;
+      pinChange = true;
     }
-
-    /*
-      if (distance >= maximumRange || distance <= minimumRange){
-      Serial.println("-1");
-      pos = 180;
-      myservo.write(pos);
-      }
-
-      else {
-      Serial.println(distance);
-      pos = 90;
-      myservo.write(pos);
-      }
-    */
-  }
-
-  // Choose and switch your Kaku device, state is true/false (HIGH/LOW)
-  void switchDefault(bool state)
-  {
-    apa3Transmitter.sendUnit(0, state);          // APA3 Kaku (Gamma)
-    delay(100);
-    actionTransmitter.sendSignal(unitCodeActionOld, actionDevice, state);  // Action Kaku, old model
-    delay(100);
-    //mySwitch.send(2210410 + state, 24);  // tricky, false = 0, true = 1  // Action Kaku, new model
-    //delay(100);
-  }
-
-  // Implementation of (simple) protocol between app and Arduino
-  // Request (from app) is single char ('a', 's', 't', 'i' etc.)
-  // Response (to app) is 4 chars  (not all commands demand a response)
-  void executeCommand(char cmd)
-  {
-    char buf[4] = {'\0', '\0', '\0', '\0'};
-
-    // Command protocol
-    Serial.print("["); Serial.print(cmd); Serial.print("] -> ");
-    switch (cmd) {
-      case 'a': // Report sensor value to the app
-        intToCharBuf(sensorValue, buf, 4);                // convert to charbuffer
-        server.write(buf, 4);                             // response is always 4 chars (\n included)
-        Serial.print("Sensor: "); Serial.println(buf);
-        break;
-      case 's': // Report switch state to the app
-        if (pinState) {
-          server.write(" ON\n");  // always send 4 chars
-          Serial.println("Pin state is ON");
-        }
-        else {
-          server.write("OFF\n");
-          Serial.println("Pin state is OFF");
-        }
-        break;
-      case 't': // Toggle state; If state is already ON then turn it OFF
-        if (pinState) {
-          pinState = false;
-          Serial.println("Set pin state to \"OFF\"");
-        }
-        else {
-          pinState = true;
-          Serial.println("Set pin state to \"ON\"");
-        }
-        pinChange = true;
-        break;
-      case 'i':
-        digitalWrite(infoPin, HIGH);
-        break;
-      default:
-        digitalWrite(infoPin, LOW);
+  else // swLevel == Low
+    if (!prevswLevel) delay(1);
+    else {
+      prevswLevel = false;  // High -> Low transition
+      state = false;
+      pinChange = true;
     }
-  }
+}
 
+// blink led on pin <pn>
+void blink(int pn)
+{
+  digitalWrite(pn, HIGH);
+  delay(100);
+  digitalWrite(pn, LOW);
+  delay(100);
+}
 
-
-  // read value from pin pn, return value is mapped between 0 and mx-1
-  int readSensor(int pn, int mx)
+// Visual feedback on pin, based on IP number, used for debug only
+// Blink ledpin for a short burst, then blink N times, where N is (related to) IP-number
+void signalNumber(int pin, int n)
+{
+  int i;
+  for (i = 0; i < 30; i++)
   {
-    return map(analogRead(pn), 0, 1023, 0, mx - 1);
+    digitalWrite(pin, HIGH);
+    delay(20);
+    digitalWrite(pin, LOW);
+    delay(20);
   }
-
-  // Convert int <val> char buffer with length <len>
-  void intToCharBuf(int val, char buf[], int len)
+  delay(1000);
+  for (i = 0; i < n; i++)
   {
-    String s;
-    s = String(val);                        // convert tot string
-    if (s.length() == 1) s = "0" + s;       // prefix redundant "0"
-    if (s.length() == 2) s = "0" + s;
-    s = s + "\n";                           // add newline
-    s.toCharArray(buf, len);                // convert string to char-buffer
+    digitalWrite(pin, HIGH);
+    delay(300);
+    digitalWrite(pin, LOW);
+    delay(300);
   }
+  delay(1000);
+}
 
-  // Check switch level and determine if an event has happend
-  // event: low -> high or high -> low
-  void checkEvent(int p, bool & state)
-  {
-    static bool swLevel = false;       // Variable to store the switch level (Low or High)
-    static bool prevswLevel = false;   // Variable to store the previous switch level
+// Convert IPAddress tot String (e.g. "192.168.1.105")
+String IPAddressToString(IPAddress address)
+{
+  return String(address[0]) + "." +
+         String(address[1]) + "." +
+         String(address[2]) + "." +
+         String(address[3]);
+}
 
-    swLevel = digitalRead(p);
-    if (swLevel)
-      if (prevswLevel) delay(1);
-      else {
-        prevswLevel = true;   // Low -> High transition
-        state = true;
-        pinChange = true;
-      }
-    else // swLevel == Low
-      if (!prevswLevel) delay(1);
-      else {
-        prevswLevel = false;  // High -> Low transition
-        state = false;
-        pinChange = true;
-      }
-  }
+// Returns B-class network-id: 192.168.1.3 -> 1)
+int getIPClassB(IPAddress address)
+{
+  return address[2];
+}
 
-  // blink led on pin <pn>
-  void blink(int pn)
-  {
-    digitalWrite(pn, HIGH);
-    delay(100);
-    digitalWrite(pn, LOW);
-    delay(100);
-  }
+// Returns computernumber in local network: 192.168.1.3 -> 3)
+int getIPComputerNumber(IPAddress address)
+{
+  return address[3];
+}
 
-  // Visual feedback on pin, based on IP number, used for debug only
-  // Blink ledpin for a short burst, then blink N times, where N is (related to) IP-number
-  void signalNumber(int pin, int n)
-  {
-    int i;
-    for (i = 0; i < 30; i++)
-    {
-      digitalWrite(pin, HIGH);
-      delay(20);
-      digitalWrite(pin, LOW);
-      delay(20);
-    }
-    delay(1000);
-    for (i = 0; i < n; i++)
-    {
-      digitalWrite(pin, HIGH);
-      delay(300);
-      digitalWrite(pin, LOW);
-      delay(300);
-    }
-    delay(1000);
-  }
-
-  // Convert IPAddress tot String (e.g. "192.168.1.105")
-  String IPAddressToString(IPAddress address)
-  {
-    return String(address[0]) + "." +
-           String(address[1]) + "." +
-           String(address[2]) + "." +
-           String(address[3]);
-  }
-
-  // Returns B-class network-id: 192.168.1.3 -> 1)
-  int getIPClassB(IPAddress address)
-  {
-    return address[2];
-  }
-
-  // Returns computernumber in local network: 192.168.1.3 -> 3)
-  int getIPComputerNumber(IPAddress address)
-  {
-    return address[3];
-  }
-
-  // Returns computernumber in local network: 192.168.1.105 -> 5)
-  int getIPComputerNumberOffset(IPAddress address, int offset)
-  {
-    return getIPComputerNumber(address) - offset;
-  }
+// Returns computernumber in local network: 192.168.1.105 -> 5)
+int getIPComputerNumberOffset(IPAddress address, int offset)
+{
+  return getIPComputerNumber(address) - offset;
+}
 
 
 
